@@ -43,7 +43,8 @@ const int kBottomControlPanelHeight = 265;
 /// rotation, cropping, and adding sticker as well as filters.
 class ImagePicker extends StatefulWidget {
   /// Default constructor for the photo and media image picker.
-  const ImagePicker(
+  const 
+  ImagePicker(
       {final Key? key,
       this.maxCount = 10,
       this.isFullscreenImage = false,
@@ -991,34 +992,40 @@ class _ImagePickerState extends State<ImagePicker>
 
   /// Build album thumbnail preview.
   Future<List<Uint8List?>> _buildAlbumThumbnails() async {
-    LogUtils.log("[_buildAlbumThumbnails] start");
-
-    if (_albums.isNotEmpty && _albumThumbnails.isEmpty) {
-      final List<Uint8List?> ret = [];
-      for (final a in _albums) {
-        final f = await (await a.getAssetListRange(start: 0, end: 1))
-            .first
-            .thumbnailDataWithSize(ThumbnailSize(
+    LogUtils.log("zxczxczxczczxczxczxczxc");
+    final List<Uint8List?> ret = [];
+    try{
+      if (_albums.isNotEmpty && _albumThumbnails.isEmpty) {
+        for (final a in _albums) {
+          final b = (await a.getAssetListRange(start: 0, end: 1));
+          if (b.isNotEmpty) {
+            final f = await b.first.thumbnailDataWithSize(ThumbnailSize(
                 _configs.albumThumbWidth, _configs.albumThumbHeight));
-        ret.add(f);
+            ret.add(f);
+          }
+        }
+        _albumThumbnails = ret;
       }
-      _albumThumbnails = ret;
+      return _albumThumbnails;
+    }catch(ex){
+      LogUtils.log("ex");
     }
-
-    return _albumThumbnails;
+    return ret;
   }
 
   /// Build album list screen.
   Widget _buildAlbumList(List<AssetPathEntity> albums, BuildContext context,
       Function(AssetPathEntity newValue) callback) {
-    LogUtils.log("[_buildAlbumList] start");
+    LogUtils.log("[_buildAlbumList] starttttttttt");
 
     return FutureBuilder(
       future: _buildAlbumThumbnails(),
       builder: (BuildContext context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
+          LogUtils.log(_albums.length.toString());
+          LogUtils.log(_albumThumbnails.length.toString());
           return ListView.builder(
-              itemCount: _albums.length,
+              itemCount: _albumThumbnails.length,
               itemBuilder: (context, i) {
                 final album = _albums[i];
                 final thumbnail = _albumThumbnails[i]!;
