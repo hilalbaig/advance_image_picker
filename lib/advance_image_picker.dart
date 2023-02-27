@@ -8,7 +8,11 @@
 library advance_image_picker;
 
 /// Image picker configuration.
+export 'configs/camera_configs.dart';
+export 'configs/done_button_style.dart';
 export 'configs/image_picker_configs.dart';
+export 'configs/image_quality_config.dart';
+export 'configs/translate_config.dart';
 
 /// Image model.
 export 'models/image_object.dart';

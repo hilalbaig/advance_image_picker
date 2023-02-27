@@ -45,5 +45,9 @@
 	<string>This application accesses your Camera to capture new images for your spots and activities you want to upload</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This application accesses your Library to get images for your spots and activities you want to upload</string>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 </dict>
 </plist>

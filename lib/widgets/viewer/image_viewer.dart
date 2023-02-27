@@ -9,7 +9,9 @@ import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 
 import '../../configs/image_picker_configs.dart';
+import '../../configs/translate_config.dart';
 import '../../models/image_object.dart';
+import '../../utils/confirm_dialog.dart';
 import '../../utils/image_utils.dart';
 import '../common/portrait_mode_mixin.dart';
 import '../editors/editor_params.dart';
@@ -45,7 +47,7 @@ class ImageViewer extends StatefulWidget {
   /// Configuration
   final ImagePickerConfigs? configs;
 
-  /// Callbac called when viewed images are changed.
+  /// Callback called when viewed images are changed.
   final Function(dynamic)? onChanged;
 
   @override
@@ -84,13 +86,16 @@ class _ImageViewerState extends State<ImageViewer>
 
   /// Build image editor controls
   List<Widget> _buildImageEditorControls(
-      BuildContext context, Color toolbarColor, Color toolbarWidgetColor) {
+    BuildContext context,
+    Color toolbarColor,
+    Color toolbarWidgetColor,
+  ) {
     final Map<String, EditorParams> imageEditors = {};
 
     // Add preset image editors
     if (_configs.cropFeatureEnabled) {
-      imageEditors[_configs.textImageCropTitle] = EditorParams(
-          title: _configs.textImageCropTitle,
+      imageEditors[_configs.tr(IPMessage.imageCropTitle)] = EditorParams(
+          title: _configs.tr(IPMessage.imageCropTitle),
           icon: Icons.crop_rotate,
           onEditorEvent: (
               {required BuildContext context,
@@ -127,8 +132,8 @@ class _ImageViewerState extends State<ImageViewer>
           });
     }
     if (_configs.adjustFeatureEnabled) {
-      imageEditors[_configs.textImageEditTitle] = EditorParams(
-          title: _configs.textImageEditTitle,
+      imageEditors[_configs.tr(IPMessage.imageEditTitle)] = EditorParams(
+          title: _configs.tr(IPMessage.imageEditTitle),
           icon: Icons.wb_sunny_outlined,
           onEditorEvent: (
                   {required BuildContext context,
@@ -148,8 +153,8 @@ class _ImageViewerState extends State<ImageViewer>
                       configs: _configs))));
     }
     if (_configs.filterFeatureEnabled) {
-      imageEditors[_configs.textImageFilterTitle] = EditorParams(
-          title: _configs.textImageFilterTitle,
+      imageEditors[_configs.tr(IPMessage.imageFilterTitle)] = EditorParams(
+          title: _configs.tr(IPMessage.imageFilterTitle),
           icon: Icons.auto_awesome,
           onEditorEvent: (
                   {required BuildContext context,
@@ -169,8 +174,8 @@ class _ImageViewerState extends State<ImageViewer>
                       configs: _configs))));
     }
     if (_configs.stickerFeatureEnabled) {
-      imageEditors[_configs.textImageStickerTitle] = EditorParams(
-          title: _configs.textImageStickerTitle,
+      imageEditors[_configs.tr(IPMessage.imageStickerTitle)] = EditorParams(
+          title: _configs.tr(IPMessage.imageStickerTitle),
           icon: Icons.insert_emoticon_rounded,
           onEditorEvent: (
                   {required BuildContext context,
@@ -204,8 +209,8 @@ class _ImageViewerState extends State<ImageViewer>
                     context: context,
                     file: image,
                     title: e.title,
-                    maxWidth: _configs.maxWidth,
-                    maxHeight: _configs.maxHeight,
+                    maxWidth: _configs.imageConfigs.maxWidth,
+                    maxHeight: _configs.imageConfigs.maxHeight,
                     configs: _configs);
                 if (outputFile != null) {
                   setState(() {
@@ -222,9 +227,9 @@ class _ImageViewerState extends State<ImageViewer>
   Future<File> _imagePreProcessing(String? path) async {
     if (_configs.imagePreProcessingBeforeEditingEnabled) {
       return ImageUtils.compressResizeImage(path!,
-          maxWidth: _configs.maxWidth,
-          maxHeight: _configs.maxHeight,
-          quality: _configs.compressQuality);
+          maxWidth: _configs.imageConfigs.maxWidth,
+          maxHeight: _configs.imageConfigs.maxHeight,
+          quality: _configs.imageConfigs.compressQuality);
     }
     return File(path!);
   }
@@ -269,41 +274,25 @@ class _ImageViewerState extends State<ImageViewer>
               GestureDetector(
                 onTap: hasImages
                     ? () async {
-                        await showDialog<void>(
-                          context: context,
-                          builder: (BuildContext context) {
-                            // return object of type Dialog.
-                            return AlertDialog(
-                              title: Text(_configs.textConfirm),
-                              content: Text(_configs.textConfirmDelete),
-                              actions: <Widget>[
-                                TextButton(
-                                  child: Text(_configs.textNo),
-                                  onPressed: () {
-                                    Navigator.of(context).pop();
-                                  },
-                                ),
-                                TextButton(
-                                  child: Text(_configs.textYes),
-                                  onPressed: () {
-                                    Navigator.of(context).pop();
-                                    setState(() {
-                                      final deleteIndex = _currentIndex!;
-                                      if (_images.length > 1) {
-                                        _currentIndex =
-                                            max(_currentIndex! - 1, 0);
-                                      } else {
-                                        _currentIndex = -1;
-                                      }
-                                      _images.removeAt(deleteIndex);
-                                      widget.onChanged?.call(_images);
-                                    });
-                                  },
-                                ),
-                              ],
-                            );
-                          },
-                        );
+                        await showConfirmDialog(
+                            context: context,
+                            title: IPMessage.confirm,
+                            content: IPMessage.confirmDelete,
+                            configs: _configs,
+                            onConfirm: () {
+                              Navigator.of(context).pop();
+                              setState(() {
+                                final deleteIndex = _currentIndex!;
+                                if (_images.length > 1) {
+                                  _currentIndex = max(_currentIndex! - 1, 0);
+                                } else {
+                                  _currentIndex = -1;
+                                }
+                                _images.removeAt(deleteIndex);
+                                widget.onChanged?.call(_images);
+                              });
+                              return true;
+                            });
                       }
                     : null,
                 child: Padding(
@@ -327,7 +316,7 @@ class _ImageViewerState extends State<ImageViewer>
                   ),
                 ])
               : Center(
-                  child: Text(_configs.textNoImages,
+                  child: Text(_configs.tr(IPMessage.noImages),
                       style: const TextStyle(color: Colors.grey))),
         ));
   }
@@ -343,18 +332,17 @@ class _ImageViewerState extends State<ImageViewer>
               scrollPhysics: const BouncingScrollPhysics(),
               builder: _buildItem,
               itemCount: _images.length,
-              backgroundDecoration: const BoxDecoration(
-                color: Colors.black,
-              ),
+              backgroundDecoration: const BoxDecoration(color: Colors.black),
               pageController: widget.pageController,
               onPageChanged: onPageChanged,
             ),
           ),
           Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _buildCurrentImageInfoView(context)),
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _buildCurrentImageInfoView(context),
+          ),
           if (_configs.ocrExtractFunc != null)
             Positioned(
                 bottom: 0,
@@ -389,6 +377,7 @@ class _ImageViewerState extends State<ImageViewer>
       widget.onChanged?.call(_images);
       return;
     });
+    return null;
   }
 
   /// Build reorderable selected image list.
@@ -457,8 +446,9 @@ class _ImageViewerState extends State<ImageViewer>
       // Get detected objects
       if (_configs.labelDetectFunc != null &&
           (retImg.recognitions?.isEmpty ?? true)) {
-        final objs = await _configs.labelDetectFunc!.call(retImg.modifiedPath);
-        if (objs.isNotEmpty) retImg.recognitions = objs;
+        final _objects =
+            await _configs.labelDetectFunc!.call(retImg.modifiedPath);
+        if (_objects.isNotEmpty) retImg.recognitions = _objects;
       }
 
       // Get OCR from image
@@ -512,8 +502,7 @@ class _ImageViewerState extends State<ImageViewer>
                                       border: Border.all(
                                           color: isSelected
                                               ? Colors.white
-                                              : Colors.grey,
-                                          width: 1),
+                                              : Colors.grey),
                                       borderRadius: const BorderRadius.all(
                                           Radius.circular(10))),
                                   padding: const EdgeInsets.symmetric(
@@ -540,7 +529,7 @@ class _ImageViewerState extends State<ImageViewer>
         });
   }
 
-  /// Build widget for displaying OCR informations
+  /// Build widget for displaying OCR information
   Widget _buildOCRTextView(BuildContext context) {
     final image = _images[_currentIndex ?? 0];
     return Stack(
@@ -578,7 +567,7 @@ class _ImageViewerState extends State<ImageViewer>
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 8, horizontal: 12),
                                 child: Row(children: [
-                                  Text(_configs.textEditText,
+                                  Text(_configs.tr(IPMessage.editText),
                                       style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 18)),
@@ -608,7 +597,7 @@ class _ImageViewerState extends State<ImageViewer>
                                   children: [
                                     TextButton(
                                       style: TextButton.styleFrom(
-                                        primary: Colors.black87,
+                                        foregroundColor: Colors.black87,
                                         backgroundColor: Colors.grey.shade200,
                                         padding: EdgeInsets.zero,
                                         shape: const RoundedRectangleBorder(
@@ -616,7 +605,7 @@ class _ImageViewerState extends State<ImageViewer>
                                               Radius.circular(30)),
                                         ),
                                       ),
-                                      child: Text(_configs.textClear,
+                                      child: Text(_configs.tr(IPMessage.clear),
                                           style: const TextStyle(
                                               color: Colors.red)),
                                       onPressed: () {
@@ -627,7 +616,7 @@ class _ImageViewerState extends State<ImageViewer>
                                     ),
                                     TextButton(
                                       style: TextButton.styleFrom(
-                                        primary: Colors.blue,
+                                        foregroundColor: Colors.blue,
                                         backgroundColor: Colors.blue,
                                         padding: EdgeInsets.zero,
                                         shape: const RoundedRectangleBorder(
@@ -635,7 +624,7 @@ class _ImageViewerState extends State<ImageViewer>
                                               Radius.circular(30)),
                                         ),
                                       ),
-                                      child: Text(_configs.textSave,
+                                      child: Text(_configs.tr(IPMessage.save),
                                           style: const TextStyle(
                                               color: Colors.white)),
                                       onPressed: () {
@@ -672,7 +661,7 @@ class _ImageViewerState extends State<ImageViewer>
           left: 10,
           child: TextButton(
             style: TextButton.styleFrom(
-              primary: Colors.blue,
+              foregroundColor: Colors.blue,
               backgroundColor: Colors.blue,
               padding: EdgeInsets.zero,
               shape: const RoundedRectangleBorder(
@@ -682,7 +671,7 @@ class _ImageViewerState extends State<ImageViewer>
             child: Padding(
               padding: const EdgeInsets.all(8),
               child: Row(children: [
-                Text(_configs.textOCR,
+                Text(_configs.tr(IPMessage.ocr),
                     style: const TextStyle(color: Colors.white)),
                 if (_isProcessing)
                   const Padding(
@@ -739,35 +728,20 @@ class _ImageViewerState extends State<ImageViewer>
     return GestureDetector(
       onTap: imageChanged
           ? () async {
-              await showDialog<void>(
-                context: context,
-                builder: (BuildContext context) {
-                  // return object of type Dialog
-                  return AlertDialog(
-                    title: Text(_configs.textConfirm),
-                    content: Text(_configs.textConfirmResetChanges),
-                    actions: <Widget>[
-                      TextButton(
-                        child: Text(_configs.textNo),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                        },
-                      ),
-                      TextButton(
-                        child: Text(_configs.textYes),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          setState(() {
-                            _images[_currentIndex!].modifiedPath =
-                                _images[_currentIndex!].originalPath;
-                            widget.onChanged?.call(_images);
-                          });
-                        },
-                      ),
-                    ],
-                  );
-                },
-              );
+              await showConfirmDialog(
+                  context: context,
+                  title: IPMessage.confirm,
+                  content: IPMessage.confirmResetChanges,
+                  configs: _configs,
+                  onConfirm: () {
+                    Navigator.of(context).pop();
+                    setState(() {
+                      _images[_currentIndex!].modifiedPath =
+                          _images[_currentIndex!].originalPath;
+                      widget.onChanged?.call(_images);
+                    });
+                    return true;
+                  });
             }
           : null,
       child: Icon(Icons.replay,

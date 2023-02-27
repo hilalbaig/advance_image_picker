@@ -1,16 +1,17 @@
 /// Image object using inside this package.
 class ImageObject {
   /// Default constructor for the image object using inside this package.
-  ImageObject(
-      {required this.originalPath,
-      required this.modifiedPath,
-      this.assetId = "",
-      this.modifiedWidth,
-      this.modifiedHeight,
-      this.recognitions,
-      this.label,
-      this.ocrText,
-      this.ocrOriginalText});
+  ImageObject({
+    required this.originalPath,
+    required this.modifiedPath,
+    this.assetId = "",
+    this.modifiedWidth,
+    this.modifiedHeight,
+    this.recognitions,
+    this.label,
+    this.ocrText,
+    this.ocrOriginalText,
+  });
 
   /// Original image path (input image path).
   String originalPath;
@@ -42,30 +43,31 @@ class ImageObject {
 
 /// Detected object
 class DetectObject {
+  /// Constructor
+  const DetectObject({
+    required this.label,
+    this.confidence,
+    this.x = 0,
+    this.y = 0,
+    this.w = 0,
+    this.h = 0,
+  });
+
   /// Label
-  String label;
+  final String label;
 
   /// Confidence of the detection
-  double? confidence;
+  final double? confidence;
 
   /// X value
-  int x;
+  final int x;
 
   /// Y value
-  int y;
+  final int y;
 
   /// W value
-  int w;
+  final int w;
 
   /// H value
-  int h;
-
-  /// Constructor
-  DetectObject(
-      {required this.label,
-      this.confidence,
-      this.x = 0,
-      this.y = 0,
-      this.w = 0,
-      this.h = 0});
+  final int h;
 }

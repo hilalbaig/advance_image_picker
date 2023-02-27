@@ -3,12 +3,12 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart' as path_provider;
 
 import '../../configs/image_picker_configs.dart';
+import '../../configs/translate_config.dart';
 import '../../utils/image_utils.dart';
 import '../../utils/time_utils.dart';
 import '../common/custom_track_shape.dart';
@@ -70,14 +70,14 @@ class _ImageStickerState extends State<ImageSticker>
     _attachedList = [];
     _stickerList = List<int>.generate(34, (index) => index + 1)
         .map((e) => Image.asset(
-              'assets/icon/$e.png',
+              'assets/icon/$e.webp',
               package: 'advance_image_picker',
             ))
         .toList();
 
     if (_configs.customStickers.isNotEmpty) {
       if (_configs.customStickerOnly) _stickerList.clear();
-      _stickerList.addAll(_configs.customStickers.map((e) => Image.asset(e)));
+      _stickerList.addAll(_configs.customStickers.map(Image.asset));
     }
   }
 
@@ -151,7 +151,7 @@ class _ImageStickerState extends State<ImageSticker>
             child: Center(
                 child: Padding(
               padding: const EdgeInsets.all(8),
-              child: Text(_configs.textImageStickerGuide,
+              child: Text(_configs.tr(IPMessage.imageStickerGuide),
                   style: const TextStyle(color: Colors.white)),
             ))),
         Positioned(

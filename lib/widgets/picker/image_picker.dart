@@ -1,18 +1,16 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:photo_manager/photo_manager.dart';
 
-import '../../configs/image_picker_configs.dart';
-import '../../models/image_object.dart';
-import '../../utils/image_utils.dart';
+import '../../advance_image_picker.dart';
+import '../../utils/confirm_dialog.dart';
 import '../../utils/log_utils.dart';
+import '../../utils/text_color_on_background.dart';
 import '../common/portrait_mode_mixin.dart';
 import '../viewer/image_viewer.dart';
 import 'media_album.dart';
@@ -27,7 +25,7 @@ class PickerMode {
 
   /// Album picker.
   // TODO(rydmike): This const property name does not conform to Dart standards,
-  //   but fixing it is a breaking change, thus not changed yet.
+  // but fixing it is a breaking change, thus not changed yet.
   // ignore: constant_identifier_names
   static const int Album = 1;
 }
@@ -43,20 +41,29 @@ const int kBottomControlPanelHeight = 265;
 /// rotation, cropping, and adding sticker as well as filters.
 class ImagePicker extends StatefulWidget {
   /// Default constructor for the photo and media image picker.
-  const 
-  ImagePicker(
-      {final Key? key,
-      this.maxCount = 10,
-      this.isFullscreenImage = false,
-      this.isCaptureFirst = true,
-      this.configs})
-      : super(key: key);
+  const ImagePicker({
+    final Key? key,
+    this.maxCount = 10,
+    this.isFullScreenImage = false,
+    this.isCaptureFirst = true,
+    this.configs,
+    this.labelsArray,
+    this.mandatoryLabelsArray,
+    this.inspectionScreenType,
+  }) : super(key: key);
+
+  // ignore: public_member_api_docs
+  final List<Map<String, String>?>? labelsArray;
+  // ignore: public_member_api_docs
+  final List<String?>? mandatoryLabelsArray;
+  // ignore: public_member_api_docs
+  final String? inspectionScreenType;
 
   /// Max selecting count
   final int maxCount;
 
-  /// Default for capturing new image in fullscreen mode or preview mode
-  final bool isFullscreenImage;
+  /// Default for capturing new image in fullScreen mode or preview mode
+  final bool isFullScreenImage;
 
   /// Custom configuration, if not provided, plugin will use
   /// default configuration.
@@ -83,7 +90,7 @@ class _ImagePickerState extends State<ImagePicker>
   int _mode = PickerMode.Camera;
 
   /// Camera controller
-  CameraController? _controller;
+  CameraController? _cameraController;
 
   /// Scroll controller for selecting images screen.
   final _scrollController = ScrollController();
@@ -104,7 +111,7 @@ class _ImagePickerState extends State<ImagePicker>
   bool _isOutputCreating = false;
 
   /// Current camera preview mode.
-  bool _isFullscreenImage = false;
+  bool _isFullScreenImage = false;
 
   /// Flag indicating state of image selecting.
   bool _isImageSelectedDone = false;
@@ -112,7 +119,7 @@ class _ImagePickerState extends State<ImagePicker>
   /// Flag indicating status of permission to access cameras
   bool _isCameraPermissionOK = false;
 
-  /// Flag indicating status of permission to access photo libray
+  /// Flag indicating status of permission to access photo library
   bool _isGalleryPermissionOK = false;
 
   /// Image configuration.
@@ -172,8 +179,8 @@ class _ImagePickerState extends State<ImagePicker>
 
     // Setting preview screen mode from configuration
     if (widget.configs != null) _configs = widget.configs!;
-    _flashMode = _configs.flashMode;
-    _isFullscreenImage = widget.isFullscreenImage;
+    _flashMode = _configs.cameraConfigs.flashMode;
+    _isFullScreenImage = widget.isFullScreenImage;
     _mode = (widget.isCaptureFirst && _configs.cameraPickerModeEnabled)
         ? PickerMode.Camera
         : PickerMode.Album;
@@ -202,8 +209,8 @@ class _ImagePickerState extends State<ImagePicker>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _exposureModeControlRowAnimationController.dispose();
-    _controller?.dispose();
-    _controller = null;
+    _cameraController?.dispose();
+    _cameraController = null;
     _cameras.clear();
     _albums.clear();
     _albumThumbnails.clear();
@@ -214,7 +221,7 @@ class _ImagePickerState extends State<ImagePicker>
   /// returns the app to the foreground.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final CameraController? cameraController = _controller;
+    final CameraController? cameraController = _cameraController;
 
     // App state changed before we got the chance to initialize.
     if (cameraController == null || !cameraController.value.isInitialized) {
@@ -241,8 +248,8 @@ class _ImagePickerState extends State<ImagePicker>
 
       // Select new camera for capturing.
       if (_cameras.isNotEmpty) {
-        final CameraDescription? newDescription = _getCamera(
-            _cameras, _getCameraDirection(_configs.cameraLensDirection));
+        final CameraDescription? newDescription = _getCamera(_cameras,
+            _getCameraDirection(_configs.cameraConfigs.cameraLensDirection));
         if (newDescription != null) {
           await _onNewCameraSelected(newDescription);
         }
@@ -279,7 +286,7 @@ class _ImagePickerState extends State<ImagePicker>
   /// Initialize current selected camera
   void _initCameraController() {
     // Create future object for initializing new camera controller.
-    final cameraController = _controller!;
+    final cameraController = _cameraController!;
     _initializeControllerFuture =
         cameraController.initialize().then((value) async {
       LogUtils.log("[_onNewCameraSelected] cameraController initialized.");
@@ -289,7 +296,7 @@ class _ImagePickerState extends State<ImagePicker>
       // After initialized, setting zoom & exposure values
       await Future.wait([
         cameraController.lockCaptureOrientation(DeviceOrientation.portraitUp),
-        cameraController.setFlashMode(_configs.flashMode),
+        cameraController.setFlashMode(_configs.cameraConfigs.flashMode),
         cameraController
             .getMinExposureOffset()
             .then((value) => _minAvailableExposureOffset = value),
@@ -318,22 +325,22 @@ class _ImagePickerState extends State<ImagePicker>
     LogUtils.log("[_onNewCameraSelected] start");
 
     // Dispose old then create new camera controller
-    if (_controller != null) {
-      await _controller!.dispose();
+    if (_cameraController != null) {
+      await _cameraController!.dispose();
     }
     final CameraController cameraController = CameraController(
       cameraDescription,
-      _configs.resolutionPreset,
+      _configs.cameraConfigs.resolutionPreset,
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.jpeg,
     );
-    _controller = cameraController;
+    _cameraController = cameraController;
 
     // Init selected camera
     _initCameraController();
 
     // If the controller is updated then update the UI.
-    _controller!.addListener(() {
+    _cameraController!.addListener(() {
       if (mounted) setState(() {});
       if (cameraController.value.hasError) {
         LogUtils.log('Camera error ${cameraController.value.errorDescription}');
@@ -374,12 +381,12 @@ class _ImagePickerState extends State<ImagePicker>
   Future<File> _imagePreProcessing(String path, {Map? croppingParams}) async {
     LogUtils.log("[_imagePreProcessing] start");
 
-    if (_configs.imagePreProcessingEnabled) {
+    if (_configs.imageConfigs.preProcessingEnabled) {
       // Run compress & resize image
       var file = await ImageUtils.compressResizeImage(path,
-          maxWidth: _configs.maxWidth,
-          maxHeight: _configs.maxHeight,
-          quality: _configs.compressQuality);
+          maxWidth: _configs.imageConfigs.maxWidth,
+          maxHeight: _configs.imageConfigs.maxHeight,
+          quality: _configs.imageConfigs.compressQuality);
       if (croppingParams != null) {
         file = await ImageUtils.cropImage(file.path,
             originX: croppingParams["originX"] as int,
@@ -400,12 +407,12 @@ class _ImagePickerState extends State<ImagePicker>
   Future<File> _imagePostProcessing(String path) async {
     LogUtils.log("[_imagePostProcessing] start");
 
-    if (!_configs.imagePreProcessingEnabled) {
+    if (!_configs.imageConfigs.preProcessingEnabled) {
       LogUtils.log("[_imagePostProcessing] end");
       return ImageUtils.compressResizeImage(path,
-          maxWidth: _configs.maxWidth,
-          maxHeight: _configs.maxHeight,
-          quality: _configs.compressQuality);
+          maxWidth: _configs.imageConfigs.maxWidth,
+          maxHeight: _configs.imageConfigs.maxHeight,
+          quality: _configs.imageConfigs.compressQuality);
     }
 
     LogUtils.log("[_imagePostProcessing] end");
@@ -418,38 +425,12 @@ class _ImagePickerState extends State<ImagePicker>
         _isImageSelectedDone ||
         _selectedImages.isEmpty) return true;
 
-    return (await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-                  title: Text(_configs.textConfirm),
-                  content: Text(_configs.textConfirmExitWithoutSelectingImages),
-                  actions: <Widget>[
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        primary: Colors.black87,
-                        minimumSize: const Size(88, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(2)),
-                        ),
-                      ),
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: Text(_configs.textNo),
-                    ),
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        primary: Colors.black87,
-                        minimumSize: const Size(88, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(2)),
-                        ),
-                      ),
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: Text(_configs.textYes),
-                    ),
-                  ],
-                ))) ??
+    return (await showConfirmDialog(
+          context: context,
+          title: IPMessage.confirm,
+          content: IPMessage.exitWithoutSelecting,
+          configs: _configs,
+        )) ??
         false;
   }
 
@@ -460,20 +441,18 @@ class _ImagePickerState extends State<ImagePicker>
     // Use theme based AppBar colors if config values are not defined.
     // The logic is based on same approach that is used in AppBar SDK source.
     final ThemeData theme = Theme.of(context);
-    final ColorScheme colorScheme = theme.colorScheme;
+
+    final _colorAccordingToBrightness =
+        theme.colorScheme.brightness == Brightness.dark
+            ? theme.colorScheme.surface
+            : theme.colorScheme.primary;
     final AppBarTheme appBarTheme = AppBarTheme.of(context);
     final Color _appBarBackgroundColor = _configs.appBarBackgroundColor ??
         appBarTheme.backgroundColor ??
-        (colorScheme.brightness == Brightness.dark
-            ? colorScheme.surface
-            : colorScheme.primary);
+        _colorAccordingToBrightness;
     final Color _appBarTextColor = _configs.appBarTextColor ??
         appBarTheme.foregroundColor ??
-        (colorScheme.brightness == Brightness.dark
-            ? colorScheme.onSurface
-            : colorScheme.onPrimary);
-    final Color _appBarDoneButtonColor =
-        _configs.appBarDoneButtonColor ?? _appBarBackgroundColor;
+        _colorAccordingToBrightness;
 
     return WillPopScope(
       onWillPop: _onWillPop,
@@ -490,7 +469,7 @@ class _ImagePickerState extends State<ImagePicker>
             foregroundColor: _appBarTextColor,
             centerTitle: false,
             actions: <Widget>[
-              _buildDoneButton(context, _appBarDoneButtonColor),
+              _buildDoneButton(context),
             ],
           ),
           body: SafeArea(child: _buildBodyView(context))),
@@ -571,55 +550,51 @@ class _ImagePickerState extends State<ImagePicker>
   //   with StatelessWidgets or StatefulWidgets.
 
   /// Build done button.
-  Widget _buildDoneButton(BuildContext context, Color buttonColor) {
+  Widget _buildDoneButton(BuildContext context) {
     if (_selectedImages.isEmpty &&
-        _configs.doneButtonDisabledBehavior ==
+        _configs.doneButtonStyle.doneButtonDisabledBehavior ==
             DoneButtonDisabledBehavior.hidden) {
       return const SizedBox.shrink();
     }
-    switch (_configs.doneButtonStyle) {
-      case DoneButtonStyle.outlinedButton:
+
+    final onPressed =
+        (_selectedImages.isNotEmpty) ? () async => _doneButtonPressed() : null;
+    switch (_configs.doneButtonStyle.type) {
+      case ButtonType.outlinedButton:
         return Padding(
             padding: const EdgeInsets.all(8),
             child: OutlinedButton(
-              onPressed: (_selectedImages.isNotEmpty)
-                  ? () async {
-                      await _doneButtonPressed();
-                    }
-                  : null,
-              style: ButtonStyle(
-                elevation: MaterialStateProperty.all(5),
-                backgroundColor: MaterialStateProperty.all(
-                    _selectedImages.isNotEmpty ? buttonColor : Colors.grey),
-                shape: MaterialStateProperty.all(RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10))),
+              onPressed: onPressed,
+              style: OutlinedButton.styleFrom(
+                elevation: 5,
+                backgroundColor: _selectedImages.isNotEmpty
+                    ? _configs.doneButtonStyle.buttonColor
+                    : Colors.grey,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
-              child: Row(children: [
-                Text(_configs.textSelectButtonTitle,
-                    style: TextStyle(
-                        color: _selectedImages.isNotEmpty
-                            ? ((buttonColor == Colors.white)
-                                ? Colors.black
-                                : Colors.white)
-                            : Colors.black)),
-                if (_isOutputCreating)
-                  const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: CupertinoActivityIndicator(),
-                  )
-              ]),
+              child: Row(
+                children: [
+                  Text(_configs.tr(IPMessage.selectButtonTitle),
+                      style: TextStyle(
+                          color: _selectedImages.isNotEmpty
+                              ? textColorBasedOnBG(
+                                  _configs.doneButtonStyle.buttonColor)
+                              : Colors.black)),
+                  if (_isOutputCreating)
+                    const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: CupertinoActivityIndicator(),
+                    )
+                ],
+              ),
             ));
-      case DoneButtonStyle.iconButton:
+      case ButtonType.iconButton:
         return IconButton(
-          icon: _isOutputCreating
-              ? const CupertinoActivityIndicator()
-              : Icon(_configs.doneButtonIcon),
-          onPressed: (_selectedImages.isNotEmpty)
-              ? () async {
-                  await _doneButtonPressed();
-                }
-              : null,
-        );
+            icon: _isOutputCreating
+                ? const CupertinoActivityIndicator()
+                : Icon(_configs.doneButtonStyle.icon),
+            onPressed: onPressed);
     }
   }
 
@@ -641,7 +616,7 @@ class _ImagePickerState extends State<ImagePicker>
       else
         _isGalleryPermissionOK
             ? _buildAlbumPreview(context)
-            : _builGalleryRequestPermissionView(context),
+            : _buildGalleryRequestPermissionView(context),
       if (_mode == PickerMode.Camera) ...[
         Positioned(
             bottom: bottomHeight.toDouble(),
@@ -670,7 +645,7 @@ class _ImagePickerState extends State<ImagePicker>
   Widget _buildZoomRatioButton(BuildContext context) {
     return TextButton(
         style: TextButton.styleFrom(
-          primary: Colors.black12,
+          foregroundColor: Colors.black12,
           minimumSize: const Size(88, 36),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           shape: const CircleBorder(),
@@ -690,12 +665,13 @@ class _ImagePickerState extends State<ImagePicker>
   Widget _buildExposureButton(BuildContext context) {
     return TextButton(
       style: TextButton.styleFrom(
-        primary: Colors.black12,
+        foregroundColor: Colors.black12,
         minimumSize: const Size(88, 36),
         padding: const EdgeInsets.all(4),
         shape: const CircleBorder(),
       ),
-      onPressed: _controller != null ? _onExposureModeButtonPressed : null,
+      onPressed:
+          _cameraController != null ? _onExposureModeButtonPressed : null,
       child: const Icon(Icons.exposure, color: Colors.white, size: 40),
     );
   }
@@ -713,18 +689,18 @@ class _ImagePickerState extends State<ImagePicker>
   Widget _buildImageFullOption(BuildContext context) {
     return TextButton(
       style: TextButton.styleFrom(
-        primary: Colors.black12,
+        foregroundColor: Colors.black12,
         minimumSize: const Size(88, 36),
         padding: const EdgeInsets.symmetric(horizontal: 16),
         shape: const CircleBorder(),
       ),
       onPressed: () {
         setState(() {
-          _isFullscreenImage = !_isFullscreenImage;
+          _isFullScreenImage = !_isFullScreenImage;
         });
       },
       child: Icon(
-          _isFullscreenImage
+          _isFullScreenImage
               ? Icons.fullscreen_exit_rounded
               : Icons.fullscreen_rounded,
           color: Colors.white,
@@ -737,11 +713,11 @@ class _ImagePickerState extends State<ImagePicker>
     // Add leading text and colon+blank, only if 'textSelectedImagesTitle' is
     // not blank in a none breaking way to previous version.
     final String _textSelectedImagesTitle =
-        _configs.textSelectedImagesTitle == ''
-            ? _configs.textSelectedImagesTitle
-            : '${_configs.textSelectedImagesTitle}: ';
+        _configs.tr(IPMessage.selectImagesTitle) == ''
+            ? _configs.tr(IPMessage.selectImagesTitle)
+            : '${_configs.tr(IPMessage.selectImagesTitle)}: ';
     return Container(
-      color: ((_mode == PickerMode.Camera) && _isFullscreenImage)
+      color: ((_mode == PickerMode.Camera) && _isFullScreenImage)
           ? _configs.bottomPanelColorInFullscreen
           : _configs.bottomPanelColor,
       padding: const EdgeInsets.all(8),
@@ -752,8 +728,8 @@ class _ImagePickerState extends State<ImagePicker>
               '${_selectedImages.length.toString()}'
               ' / ${widget.maxCount.toString()}',
               style: const TextStyle(color: Colors.white, fontSize: 14)),
-          if (_configs.textSelectedImagesGuide != '')
-            Text(_configs.textSelectedImagesGuide,
+          if (_configs.tr(IPMessage.selectImagesGuide) != '')
+            Text(_configs.tr(IPMessage.selectImagesGuide),
                 style: const TextStyle(color: Colors.grey, fontSize: 14))
         ],
         _buildReorderableSelectedImageList(context),
@@ -769,7 +745,7 @@ class _ImagePickerState extends State<ImagePicker>
   Widget _buildAlbumSelectButton(BuildContext context,
       {bool isPop = false, bool isCameraMode = false}) {
     if (isCameraMode) {
-      return Text(_configs.textCameraTitle,
+      return Text(_configs.tr(IPMessage.cameraTitle),
           style: TextStyle(color: _configs.appBarTextColor, fontSize: 16));
     }
 
@@ -831,10 +807,10 @@ class _ImagePickerState extends State<ImagePicker>
               ),
             ),
             onPressed: _initCameraController,
-            child: Text(_configs.textRequestPermission,
+            child: Text(_configs.tr(IPMessage.requestPermission),
                 style: const TextStyle(color: Colors.black)),
           ),
-          Text(_configs.textRequestCameraPermission,
+          Text(_configs.tr(IPMessage.requestCameraPermission),
               style: const TextStyle(color: Colors.grey))
         ],
       ),
@@ -846,7 +822,7 @@ class _ImagePickerState extends State<ImagePicker>
     LogUtils.log("[_buildCameraPreview] start");
 
     final size = MediaQuery.of(context).size;
-    if (_controller?.value == null || _isDisposed) {
+    if (_cameraController?.value == null || _isDisposed) {
       return SizedBox(
           width: size.width,
           height: size.height,
@@ -858,16 +834,16 @@ class _ImagePickerState extends State<ImagePicker>
         future: _initializeControllerFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done) {
-            return (_controller?.value.isInitialized ?? false)
+            return (_cameraController?.value.isInitialized ?? false)
                 ? SizedBox(
                     width: size.width,
                     height: size.height,
                     child: AspectRatio(
-                        aspectRatio: _controller!.value.aspectRatio,
+                        aspectRatio: _cameraController!.value.aspectRatio,
                         child: Listener(
                             onPointerDown: (_) => _pointers++,
                             onPointerUp: (_) => _pointers--,
-                            child: CameraPreview(_controller!, child:
+                            child: CameraPreview(_cameraController!, child:
                                 LayoutBuilder(builder: (BuildContext context,
                                     BoxConstraints constraints) {
                               return GestureDetector(
@@ -886,11 +862,11 @@ class _ImagePickerState extends State<ImagePicker>
 
   /// Tap event on camera preview.
   void _onViewFinderTap(TapDownDetails details, BoxConstraints constraints) {
-    if (_controller == null) {
+    if (_cameraController == null) {
       return;
     }
 
-    final CameraController cameraController = _controller!;
+    final CameraController cameraController = _cameraController!;
 
     final offset = Offset(
       details.localPosition.dx / constraints.maxWidth,
@@ -908,14 +884,14 @@ class _ImagePickerState extends State<ImagePicker>
   /// Handle scale updated event.
   Future<void> _handleScaleUpdate(ScaleUpdateDetails details) async {
     // When there are not exactly two fingers on screen don't scale.
-    if (_controller == null || _pointers != 2) {
+    if (_cameraController == null || _pointers != 2) {
       return;
     }
 
     final double scale = (_baseScale * details.scale)
         .clamp(_minAvailableZoom, _maxAvailableZoom);
 
-    await _controller!.setZoomLevel(scale);
+    await _cameraController!.setZoomLevel(scale);
 
     setState(() {
       _currentScale = scale;
@@ -923,7 +899,7 @@ class _ImagePickerState extends State<ImagePicker>
   }
 
   /// Build camera request permission view
-  Widget _builGalleryRequestPermissionView(BuildContext context) {
+  Widget _buildGalleryRequestPermissionView(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final bottomHeight = (widget.maxCount == 1)
         ? (kBottomControlPanelHeight - 40)
@@ -941,10 +917,10 @@ class _ImagePickerState extends State<ImagePicker>
               ),
             ),
             onPressed: _initPhotoGallery,
-            child: Text(_configs.textRequestPermission,
+            child: Text(_configs.tr(IPMessage.requestPermission),
                 style: const TextStyle(color: Colors.black)),
           ),
-          Text(_configs.textRequestGalleryPermission,
+          Text(_configs.tr(IPMessage.requestGalleryPermission),
               style: const TextStyle(color: Colors.grey))
         ]));
   }
@@ -992,40 +968,34 @@ class _ImagePickerState extends State<ImagePicker>
 
   /// Build album thumbnail preview.
   Future<List<Uint8List?>> _buildAlbumThumbnails() async {
-    LogUtils.log("zxczxczxczczxczxczxczxc");
-    final List<Uint8List?> ret = [];
-    try{
-      if (_albums.isNotEmpty && _albumThumbnails.isEmpty) {
-        for (final a in _albums) {
-          final b = (await a.getAssetListRange(start: 0, end: 1));
-          if (b.isNotEmpty) {
-            final f = await b.first.thumbnailDataWithSize(ThumbnailSize(
+    LogUtils.log("[_buildAlbumThumbnails] start");
+
+    if (_albums.isNotEmpty && _albumThumbnails.isEmpty) {
+      final List<Uint8List?> ret = [];
+      for (final a in _albums) {
+        final f = await (await a.getAssetListRange(start: 0, end: 1))
+            .first
+            .thumbnailDataWithSize(ThumbnailSize(
                 _configs.albumThumbWidth, _configs.albumThumbHeight));
-            ret.add(f);
-          }
-        }
-        _albumThumbnails = ret;
+        ret.add(f);
       }
-      return _albumThumbnails;
-    }catch(ex){
-      LogUtils.log("ex");
+      _albumThumbnails = ret;
     }
-    return ret;
+
+    return _albumThumbnails;
   }
 
   /// Build album list screen.
   Widget _buildAlbumList(List<AssetPathEntity> albums, BuildContext context,
       Function(AssetPathEntity newValue) callback) {
-    LogUtils.log("[_buildAlbumList] starttttttttt");
+    LogUtils.log("[_buildAlbumList] start");
 
     return FutureBuilder(
       future: _buildAlbumThumbnails(),
       builder: (BuildContext context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
-          LogUtils.log(_albums.length.toString());
-          LogUtils.log(_albumThumbnails.length.toString());
           return ListView.builder(
-              itemCount: _albumThumbnails.length,
+              itemCount: _albums.length,
               itemBuilder: (context, i) {
                 final album = _albums[i];
                 final thumbnail = _albumThumbnails[i]!;
@@ -1037,7 +1007,7 @@ class _ImagePickerState extends State<ImagePicker>
                           child: Image.memory(thumbnail, fit: BoxFit.cover)),
                       title: Text(album.name,
                           style: const TextStyle(color: Colors.white)),
-                      subtitle: Text(album.assetCount.toString(),
+                      subtitle: Text(album.assetCountAsync.toString(),
                           style: const TextStyle(color: Colors.grey)),
                       onTap: () async {
                         callback.call(album);
@@ -1071,6 +1041,7 @@ class _ImagePickerState extends State<ImagePicker>
       _selectedImages.insert(_newIndex, items);
       return;
     });
+    return null;
   }
 
   /// Build reorderable selected image list.
@@ -1126,31 +1097,16 @@ class _ImagePickerState extends State<ImagePicker>
               ),
               onTap: () {
                 if (_configs.showRemoveImageAlert) {
-                  showDialog<void>(
-                    context: context,
-                    builder: (BuildContext context) {
-                      // return object of type Dialog
-                      return AlertDialog(
-                        title: Text(_configs.textConfirm),
-                        content: Text(_configs.textConfirmDelete),
-                        actions: <Widget>[
-                          TextButton(
-                            child: Text(_configs.textNo),
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                          ),
-                          TextButton(
-                            child: Text(_configs.textYes),
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              _removeImage(index);
-                            },
-                          ),
-                        ],
-                      );
-                    },
-                  );
+                  showConfirmDialog(
+                      context: context,
+                      title: IPMessage.confirm,
+                      content: IPMessage.confirmDelete,
+                      configs: _configs,
+                      onConfirm: () {
+                        _removeImage(index);
+                        Navigator.of(context).pop();
+                        return true;
+                      });
                 } else {
                   _removeImage(index);
                 }
@@ -1188,10 +1144,10 @@ class _ImagePickerState extends State<ImagePicker>
                                 PageRouteBuilder<dynamic>(
                                     pageBuilder: (context, animation, __) {
                               _configs.imagePreProcessingBeforeEditingEnabled =
-                                  !_configs.imagePreProcessingEnabled;
+                                  !_configs.imageConfigs.preProcessingEnabled;
 
                               return ImageViewer(
-                                  title: _configs.textPreviewTitle,
+                                  title: _configs.tr(IPMessage.previewTitle),
                                   images: _selectedImages,
                                   initialIndex: i,
                                   configs: _configs,
@@ -1212,20 +1168,31 @@ class _ImagePickerState extends State<ImagePicker>
                         ))
                   else
                     Container(
-                        key: ValueKey(i.toString()),
-                        width: _configs.thumbWidth.toDouble(),
-                        height: _configs.thumbHeight.toDouble(),
-                        margin: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey,
-                          border: Border.all(
-                              color: (i == _selectedImages.length)
-                                  ? Colors.blue
-                                  : Colors.white,
-                              width: 3),
-                          borderRadius:
-                              const BorderRadius.all(Radius.circular(10)),
-                        ))
+                      key: ValueKey(i.toString()),
+                      width: _configs.thumbWidth.toDouble(),
+                      height: _configs.thumbHeight.toDouble(),
+                      margin: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        border: Border.all(
+                            color: (i == _selectedImages.length)
+                                ? Colors.blue
+                                : Colors.white,
+                            width: 3),
+                        borderRadius:
+                            const BorderRadius.all(Radius.circular(10)),
+                      ),
+                      child: Center(
+                        child: Image.asset(
+                          widget.inspectionScreenType ==
+                                  'inspectionTypeMotercycle'
+                              ? 'assets/images/motorcycle-images/${widget.labelsArray![i]!['ico']}.png'
+                              : 'assets/images/automotive-images/${widget.labelsArray![i]!['ico']}.png',
+                          // width: 300,
+                          // height: 100,
+                        ),
+                      ),
+                    )
               ]),
         ));
   }
@@ -1270,8 +1237,8 @@ class _ImagePickerState extends State<ImagePicker>
   Widget _buildCameraControls(BuildContext context) {
     final isMaxCount = _selectedImages.length >= widget.maxCount;
 
-    final canSwitchCamera =
-        _cameras.length > 1 && _configs.cameraLensDirection == null;
+    final canSwitchCamera = _cameras.length > 1 &&
+        _configs.cameraConfigs.cameraLensDirection == null;
 
     return _mode == PickerMode.Camera
         ? Container(
@@ -1280,7 +1247,7 @@ class _ImagePickerState extends State<ImagePicker>
             child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  if (_configs.showFlashMode)
+                  if (_configs.cameraConfigs.showFlashMode)
                     GestureDetector(
                       child: Icon(_flashModeIcon(_flashMode),
                           size: 32, color: Colors.white),
@@ -1290,7 +1257,7 @@ class _ImagePickerState extends State<ImagePicker>
                         // Cycle to next flash mode.
                         _cycleFlashMode();
                         // Update camera to new flash mode.
-                        await _controller!
+                        await _cameraController!
                             .setFlashMode(_flashMode)
                             .then((value) => setState(() {}));
                       },
@@ -1317,7 +1284,7 @@ class _ImagePickerState extends State<ImagePicker>
                           }
                         : null,
                     onTap: (!isMaxCount &&
-                            !(_controller?.value.isTakingPicture ?? true))
+                            !(_cameraController?.value.isTakingPicture ?? true))
                         ? () async {
                             LogUtils.log(
                                 "[_buildCameraControls] capture pressed");
@@ -1325,7 +1292,8 @@ class _ImagePickerState extends State<ImagePicker>
                             // Ensure that the camera is initialized.
                             await _initializeControllerFuture;
 
-                            if (!(_controller?.value.isTakingPicture ?? true)) {
+                            if (!(_cameraController?.value.isTakingPicture ??
+                                true)) {
                               try {
                                 // Scroll to end of list.
                                 await _scrollController.animateTo(
@@ -1337,12 +1305,13 @@ class _ImagePickerState extends State<ImagePicker>
                                 );
 
                                 // Take new picture.
-                                final file = await _controller!.takePicture();
+                                final file =
+                                    await _cameraController!.takePicture();
                                 LogUtils.log(
                                     "[_buildCameraControls] takePicture done");
 
                                 Map<String, dynamic>? croppingParams;
-                                if (!_isFullscreenImage) {
+                                if (!_isFullScreenImage) {
                                   croppingParams = <String, dynamic>{};
                                   if (mounted) {
                                     final size = MediaQuery.of(context).size;
@@ -1387,10 +1356,11 @@ class _ImagePickerState extends State<ImagePicker>
                         color: !isMaxCount ? Colors.white : Colors.grey),
                   ),
                   GestureDetector(
-                    onTap: canSwitchCamera && _configs.showLensDirection
+                    onTap: canSwitchCamera &&
+                            _configs.cameraConfigs.showLensDirection
                         ? () async {
                             final lensDirection =
-                                _controller!.description.lensDirection;
+                                _cameraController!.description.lensDirection;
                             final CameraDescription? newDescription =
                                 _getCamera(
                                     _cameras,
@@ -1406,7 +1376,7 @@ class _ImagePickerState extends State<ImagePicker>
                         : null,
                     child: Icon(Icons.switch_camera,
                         size: 32,
-                        color: _configs.showLensDirection
+                        color: _configs.cameraConfigs.showLensDirection
                             ? (canSwitchCamera ? Colors.white : Colors.grey)
                             : Colors.transparent),
                   )
@@ -1422,14 +1392,14 @@ class _ImagePickerState extends State<ImagePicker>
           backgroundColor: Colors.transparent,
           thumbColor: Colors.transparent,
           children: {
-            0: Text(_configs.textCameraTitle,
+            0: Text(_configs.tr(IPMessage.cameraTitle),
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: (_mode == PickerMode.Camera)
                         ? Colors.white
                         : Colors.grey)),
-            1: Text(_configs.textAlbumTitle,
+            1: Text(_configs.tr(IPMessage.albumTitle),
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -1459,17 +1429,19 @@ class _ImagePickerState extends State<ImagePicker>
 
   /// Build exposure mode control widget.
   Widget _exposureModeControlRowWidget() {
-    if (_controller?.value == null) return const SizedBox();
+    if (_cameraController?.value == null) return const SizedBox();
 
     final ButtonStyle styleAuto = TextButton.styleFrom(
-      primary: _controller?.value.exposureMode == ExposureMode.auto
-          ? Colors.orange
-          : Colors.white,
+      foregroundColor:
+          _cameraController?.value.exposureMode == ExposureMode.auto
+              ? Colors.orange
+              : Colors.white,
     );
     final ButtonStyle styleLocked = TextButton.styleFrom(
-      primary: _controller?.value.exposureMode == ExposureMode.locked
-          ? Colors.orange
-          : Colors.white,
+      foregroundColor:
+          _cameraController?.value.exposureMode == ExposureMode.locked
+              ? Colors.orange
+              : Colors.white,
     );
 
     const textStyle = TextStyle(color: Colors.white);
@@ -1485,28 +1457,28 @@ class _ImagePickerState extends State<ImagePicker>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  Text(_configs.textExposure, style: textStyle),
+                  Text(_configs.tr(IPMessage.exposureTitle), style: textStyle),
                   const SizedBox(width: 8),
                   TextButton(
                     style: styleAuto,
-                    onPressed: _controller != null
+                    onPressed: _cameraController != null
                         ? () =>
                             _onSetExposureModeButtonPressed(ExposureMode.auto)
                         : null,
                     onLongPress: () {
-                      if (_controller != null) {
-                        _controller!.setExposurePoint(null);
+                      if (_cameraController != null) {
+                        _cameraController!.setExposurePoint(null);
                       }
                     },
-                    child: Text(_configs.textExposureAuto),
+                    child: Text(_configs.tr(IPMessage.exposureAutoTitle)),
                   ),
                   TextButton(
                     style: styleLocked,
-                    onPressed: _controller != null
+                    onPressed: _cameraController != null
                         ? () =>
                             _onSetExposureModeButtonPressed(ExposureMode.locked)
                         : null,
-                    child: Text(_configs.textExposureLocked),
+                    child: Text(_configs.tr(IPMessage.exposureLockedTitle)),
                   ),
                 ],
               ),
@@ -1548,12 +1520,12 @@ class _ImagePickerState extends State<ImagePicker>
 
   /// Set exposure mode button.
   Future<void> _setExposureMode(ExposureMode mode) async {
-    if (_controller == null) {
+    if (_cameraController == null) {
       return;
     }
 
     try {
-      await _controller!.setExposureMode(mode);
+      await _cameraController!.setExposureMode(mode);
     } on CameraException catch (_) {
       rethrow;
     }
@@ -1561,7 +1533,7 @@ class _ImagePickerState extends State<ImagePicker>
 
   /// Set exposure offset.
   Future<void> _setExposureOffset(double offset) async {
-    if (_controller == null) {
+    if (_cameraController == null) {
       return;
     }
 
@@ -1570,7 +1542,7 @@ class _ImagePickerState extends State<ImagePicker>
     });
     try {
       // The return value is not used or needed, let's no assign it to offset.
-      await _controller!.setExposureOffset(offset);
+      await _cameraController!.setExposureOffset(offset);
     } on CameraException catch (_) {
       rethrow;
     }

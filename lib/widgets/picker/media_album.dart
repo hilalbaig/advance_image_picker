@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../models/image_object.dart';
@@ -140,7 +139,7 @@ class MediaAlbumState extends State<MediaAlbum> {
 
   @override
   Widget build(BuildContext context) {
-    final gridview = GridView.builder(
+    final gridView = GridView.builder(
         shrinkWrap: true,
         itemCount: _assets.length,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -223,6 +222,6 @@ class MediaAlbumState extends State<MediaAlbum> {
           );
         });
 
-    return gridview;
+    return gridView;
   }
 }

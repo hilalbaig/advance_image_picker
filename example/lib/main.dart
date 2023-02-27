@@ -24,15 +24,21 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // Setup image picker configs
     final configs = ImagePickerConfigs();
+
     // AppBar text color
     configs.appBarTextColor = Colors.white;
-    configs.appBarBackgroundColor = Colors.orange;
+    configs.appBarBackgroundColor = Color(0xff2a3042);
+
     // Disable select images from album
     // configs.albumPickerModeEnabled = false;
     // Only use front camera for capturing
     // configs.cameraLensDirection = 0;
     // Translate function
-    configs.translateFunc = (name, value) => Intl.message(value, name: name);
+    configs.translations.translateFunc =
+        (label, defaultTranslation) => Intl.message(
+              defaultTranslation,
+              name: label,
+            );
     // Disable edit function, then add other edit control instead
     configs.adjustFeatureEnabled = false;
     configs.externalImageEditors['external_image_editor_1'] = EditorParams(
@@ -78,9 +84,9 @@ class MyApp extends StatelessWidget {
     // You can use Google ML Kit or TensorflowLite for this purpose
     configs.labelDetectFunc = (String path) async {
       return <DetectObject>[
-        DetectObject(label: 'dummy1', confidence: 0.75),
-        DetectObject(label: 'dummy2', confidence: 0.75),
-        DetectObject(label: 'dummy3', confidence: 0.75)
+        const DetectObject(label: 'dummy1', confidence: 0.75),
+        const DetectObject(label: 'dummy2', confidence: 0.75),
+        const DetectObject(label: 'dummy3', confidence: 0.75)
       ];
     };
     configs.ocrExtractFunc =
@@ -116,7 +122,7 @@ class MyApp extends StatelessWidget {
         // is not restarted.
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'advance_image_picker Demo'),
+      home: const MyHomePage(title: 'Side Photos'),
     );
   }
 }
@@ -131,14 +137,14 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  List<ImageObject> _imgObjs = [];
+  List<ImageObject> _imgObjects = [];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
+        // the App.build method, and use it to set our appBar title.
         title: Text(widget.title),
       ),
       body: Center(
@@ -148,11 +154,11 @@ class _MyHomePageState extends State<MyHomePage> {
           children: <Widget>[
             GridView.builder(
                 shrinkWrap: true,
-                itemCount: _imgObjs.length,
+                itemCount: _imgObjects.length,
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4, mainAxisSpacing: 2, crossAxisSpacing: 2),
                 itemBuilder: (BuildContext context, int index) {
-                  final image = _imgObjs[index];
+                  final image = _imgObjects[index];
                   return Padding(
                     padding: const EdgeInsets.all(2),
                     child: Image.file(File(image.modifiedPath),
@@ -164,15 +170,68 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
+          const List<Map<String, String>> sidePhotos = [
+            {
+              "name": 'Front',
+              "value": 'front',
+              "ico": 'front-view',
+            },
+            {
+              "name": 'Front Left',
+              "value": 'frontLeftCorner',
+              "ico": 'left-front-corner-view',
+            },
+            {
+              "name": 'Left',
+              "value": 'left',
+              "ico": 'left-view',
+            },
+            {
+              "name": 'Rear Left',
+              "value": 'rearLeftCorner',
+              "ico": 'left-rear-corner-view',
+            },
+            {
+              "name": 'Rear',
+              "value": 'rear',
+              "ico": 'rear-view',
+            },
+            {
+              "name": 'Rear Right',
+              "value": 'rearRightCorner',
+              "ico": 'right-rear-corner-view',
+            },
+            {
+              "name": 'Right',
+              "value": 'right',
+              "ico": 'right-view',
+            },
+            {
+              "name": 'Front Right',
+              "value": 'frontRightCorner',
+              "ico": 'right-front-corner-view',
+            },
+            {
+              "name": 'Odometer',
+              "value": 'odometer',
+              "ico": 'odometer-view',
+            }
+          ];
+
           // Get max 5 images
           final List<ImageObject>? objects = await Navigator.of(context)
               .push(PageRouteBuilder(pageBuilder: (context, animation, __) {
-            return const ImagePicker(maxCount: 5);
+            return ImagePicker(
+              maxCount: sidePhotos.length,
+              labelsArray: sidePhotos,
+              mandatoryLabelsArray: ['front'],
+              inspectionScreenType: 'inspectionTypeVehicle',
+            );
           }));
 
           if ((objects?.length ?? 0) > 0) {
             setState(() {
-              _imgObjs = objects!;
+              _imgObjects = objects!;
             });
           }
         },
