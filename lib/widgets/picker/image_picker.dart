@@ -1167,32 +1167,7 @@ class _ImagePickerState extends State<ImagePicker>
                               _selectedImages[i].modifiedPath, i),
                         ))
                   else
-                    Container(
-                      key: ValueKey(i.toString()),
-                      width: _configs.thumbWidth.toDouble(),
-                      height: _configs.thumbHeight.toDouble(),
-                      margin: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        border: Border.all(
-                            color: (i == _selectedImages.length)
-                                ? Colors.blue
-                                : Colors.white,
-                            width: 3),
-                        borderRadius:
-                            const BorderRadius.all(Radius.circular(10)),
-                      ),
-                      child: Center(
-                        child: Image.asset(
-                          widget.inspectionScreenType ==
-                                  'inspectionTypeMotercycle'
-                              ? 'assets/images/motorcycle-images/${widget.labelsArray![i]!['ico']}.png'
-                              : 'assets/images/automotive-images/${widget.labelsArray![i]!['ico']}.png',
-                          // width: 300,
-                          // height: 100,
-                        ),
-                      ),
-                    )
+                    buildContatiner(i),
               ]),
         ));
   }
@@ -1211,6 +1186,158 @@ class _ImagePickerState extends State<ImagePicker>
         return Icons.flash_on;
     }
   }
+
+  Widget buildContatiner(int i) {
+    return Container(
+      key: ValueKey(i.toString()),
+      width: _configs.thumbWidth.toDouble(),
+      height: _configs.thumbHeight.toDouble(),
+      margin: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        border: Border.all(
+            color: (i == _selectedImages.length) ? Colors.blue : Colors.white,
+            width: 3),
+        borderRadius: const BorderRadius.all(Radius.circular(10)),
+      ),
+      child: Center(
+        child: Image.asset(
+          widget.inspectionScreenType == 'inspectionTypeMotercycle'
+              ? 'assets/images/motorcycle-images/${widget.labelsArray![i]!['ico']}.png'
+              : 'assets/images/automotive-images/${widget.labelsArray![i]!['ico']}.png',
+          // width: 300,
+          // height: 100,
+        ),
+      ),
+    );
+  }
+
+  // Widget buildContatiner2(int i) {
+
+  //   bool isMandatory = true;//(item['value']);
+  //   String name = "front";
+
+  //   return Card(
+  //                           elevation: 1,
+  //                           shape: isMandatory
+  //                               ? RoundedRectangleBorder(
+  //                                   side: const BorderSide(
+  //                                     color: Colors.red,
+  //                                   ),
+  //                                   borderRadius: BorderRadius.circular(10.0))
+  //                               : null,
+  //                           child: Padding(
+  //                             padding: const EdgeInsets.only(bottom: 2),
+  //                             child: Column(
+  //                               children: [
+  //                                 Expanded(
+  //                                   child: ((pro?.url ?? "").isNotEmpty ||
+  //                                           pro?.file != null)
+  //                                       ? SidePhotoCell(
+  //                                           gallery: model.tradein?.sidePhotos
+  //                                               ?.asProImageList(),
+  //                                           item: pro!,
+  //                                           title: model
+  //                                               .tradein!.vehicleDisplayNameMM,
+  //                                           showDelete:
+  //                                               widget.mode == TIPageMode.edit,
+  //                                           onDeletePressed: (proImage) {
+  //                                             deleteSidePhoto(item['value']);
+  //                                             model.deleteFromCloud(proImage);
+  //                                             model.update();
+  //                                           },
+  //                                         )
+  //                                       : InkWell(
+  //                                           onTap: widget.mode ==
+  //                                                   TIPageMode.edit
+  //                                               ? () {
+  //                                                   selectedType =
+  //                                                       item['value'];
+  //                                                   showPickerSheet(context);
+  //                                                 }
+  //                                               : null,
+  //                                           child: Container(
+  //                                             color: Colors.blue.shade50,
+  //                                             child: Center(
+  //                                               child: Image.asset(
+  //                                                 widget.inspectionScreenType ==
+  //                                                         InspectionScreenType
+  //                                                             .inspectionTypeMotercycle
+  //                                                     ? 'lib/images/motorcycle-images/${item['ico']}.png'
+  //                                                     : 'lib/images/automotive-images/${item['ico']}.png',
+  //                                                 // width: 300,
+  //                                                 // height: 100,
+  //                                                 package: 'amspro_tradein',
+  //                                               ),
+  //                                             ),
+  //                                           ),
+  //                                         ),
+  //                                 ),
+
+  //                                 SizedBox(
+  //                                   height: 20,
+  //                                   child: Center(
+  //                                     child: RichText(
+  //                                       overflow: TextOverflow.fade,
+  //                                       maxLines: 1,
+  //                                       textAlign: TextAlign.center,
+  //                                       softWrap: true,
+  //                                       text: TextSpan(children: [
+  //                                         TextSpan(
+  //                                           text: item['name'] ?? "--",
+  //                                           style: const TextStyle(
+  //                                             fontSize: 12,
+  //                                             color: Colors.black,
+  //                                           ),
+  //                                         ),
+  //                                         if (isMandatory)
+  //                                           TextSpan(
+  //                                             text: " ✱",
+  //                                             style: Theme.of(context)
+  //                                                 .textTheme
+  //                                                 .subtitle2!
+  //                                                 .copyWith(
+  //                                                     color: Colors.red,
+  //                                                     fontSize: 10),
+  //                                           )
+  //                                       ]),
+  //                                     ),
+  //                                   ),
+  //                                 ),
+  //                                 // Text(
+  //                                 //   item['name'] ?? "--",
+  //                                 //   overflow: TextOverflow.fade,
+  //                                 //   maxLines: 1,
+  //                                 //   textAlign: TextAlign.center,
+  //                                 //   softWrap: true,
+  //                                 //   style: const TextStyle(fontSize: 12),
+  //                                 // )
+  //                               ],
+  //                             ),
+  //                           ));
+  //   return Container(
+  //     key: ValueKey(i.toString()),
+  //     width: _configs.thumbWidth.toDouble(),
+  //     height: _configs.thumbHeight.toDouble(),
+  //     margin: const EdgeInsets.all(4),
+  //     decoration: BoxDecoration(
+  //       color: Colors.blue.shade50,
+  //       border: Border.all(
+  //           color: (i == _selectedImages.length) ? Colors.blue : Colors.white,
+  //           width: 3),
+  //       borderRadius: const BorderRadius.all(Radius.circular(10)),
+  //     ),
+  //     child: Center(
+  //       child: Image.asset(
+  //         widget.inspectionScreenType == 'inspectionTypeMotercycle'
+  //             ? 'assets/images/motorcycle-images/${widget.labelsArray![i]!['ico']}.png'
+  //             : 'assets/images/automotive-images/${widget.labelsArray![i]!['ico']}.png',
+  //         // width: 300,
+  //         // height: 100,
+  //       ),
+  //     ),
+  //   );
+  // }
 
   /// Cycle through FlashMode, called when users taps on FlashMode.
   ///

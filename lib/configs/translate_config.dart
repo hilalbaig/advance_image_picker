@@ -144,7 +144,7 @@ enum IPMessage {
 
   /// In en, this message translates to:
   /// 'You can drag images for sorting list...'
-  selectImagesGuide("You can drag images for sorting list...");
+  selectImagesGuide("");
 
   /// The default message of the string
   final String defaultTranslation;
